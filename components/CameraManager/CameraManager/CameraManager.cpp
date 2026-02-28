@@ -100,58 +100,67 @@ void CameraManager::setupCameraSensor()
     ESP_LOGI(CAMERA_MANAGER_TAG, "Setting up camera sensor");
 
     camera_sensor = esp_camera_sensor_get();
-    // fixes corrupted jpegs, https://github.com/espressif/esp32-camera/issues/203
-    // documentation https://www.uctronics.com/download/cam_module/OV2640DS.pdf
-    camera_sensor->set_reg(camera_sensor, 0xff, 0xff,
-                           0x00);                          // banksel, here we're directly writing to the registers.
-                                                           // 0xFF==0x00 is the first bank, there's also 0xFF==0x01
-    camera_sensor->set_reg(camera_sensor, 0xd3, 0xff, 5);  // clock
-    camera_sensor->set_brightness(camera_sensor, 2);       // -2 to 2
-    camera_sensor->set_contrast(camera_sensor, 2);         // -2 to 2
-    camera_sensor->set_saturation(camera_sensor, -2);      // -2 to 2
 
-    // white balance control
-    camera_sensor->set_whitebal(camera_sensor, 1);  // 0 = disable , 1 = enable
-    camera_sensor->set_awb_gain(camera_sensor, 0);  // 0 = disable , 1 = enable
-    camera_sensor->set_wb_mode(camera_sensor,
-                               0);  // 0 to 4 - if awb_gain enabled (0 - Auto, 1 -
-                                    // Sunny, 2 - Cloudy, 3 - Office, 4 - Home)
+    // The following hardcoded register hacks, manual exposure, and grayscale effects
+    // were specifically calibrated for the OV2640 for OpenIris' IR tracking.
+    // Applying them to other sensors like the OV3660 can result in completely pitch-black
+    // images (1KB empty frames) or ISP crashes.
+    if (camera_sensor->id.PID == OV2640_PID)
+    {
+        // fixes corrupted jpegs on OV2640, https://github.com/espressif/esp32-camera/issues/203
+        // documentation https://www.uctronics.com/download/cam_module/OV2640DS.pdf
+        camera_sensor->set_reg(camera_sensor, 0xff, 0xff,
+                               0x00);                          // banksel, here we're directly writing to the registers.
+                                                               // 0xFF==0x00 is the first bank, there's also 0xFF==0x01
+        camera_sensor->set_reg(camera_sensor, 0xd3, 0xff, 5);  // clock
 
-    // controls the exposure
-    camera_sensor->set_exposure_ctrl(camera_sensor,
-                                     0);               // 0 = disable , 1 = enable
-    camera_sensor->set_aec2(camera_sensor, 0);         // 0 = disable , 1 = enable
-    camera_sensor->set_ae_level(camera_sensor, 0);     // -2 to 2
-    camera_sensor->set_aec_value(camera_sensor, 300);  // 0 to 1200
+        camera_sensor->set_brightness(camera_sensor, 2);   // -2 to 2
+        camera_sensor->set_contrast(camera_sensor, 2);     // -2 to 2
+        camera_sensor->set_saturation(camera_sensor, -2);  // -2 to 2
 
-    // controls the gain
-    camera_sensor->set_gain_ctrl(camera_sensor, 0);  // 0 = disable , 1 = enable
+        // white balance control
+        camera_sensor->set_whitebal(camera_sensor, 1);  // 0 = disable , 1 = enable
+        camera_sensor->set_awb_gain(camera_sensor, 0);  // 0 = disable , 1 = enable
+        camera_sensor->set_wb_mode(camera_sensor,
+                                   0);  // 0 to 4 - if awb_gain enabled (0 - Auto, 1 -
+                                        // Sunny, 2 - Cloudy, 3 - Office, 4 - Home)
 
-    // automatic gain control gain, controls by how much the resulting image
-    // should be amplified
-    camera_sensor->set_agc_gain(camera_sensor, 2);                                 // 0 to 30
-    camera_sensor->set_gainceiling(camera_sensor, static_cast<gainceiling_t>(6));  // 0 to 6
+        // controls the exposure
+        camera_sensor->set_exposure_ctrl(camera_sensor,
+                                         0);               // 0 = disable , 1 = enable
+        camera_sensor->set_aec2(camera_sensor, 0);         // 0 = disable , 1 = enable
+        camera_sensor->set_ae_level(camera_sensor, 0);     // -2 to 2
+        camera_sensor->set_aec_value(camera_sensor, 300);  // 0 to 1200
 
-    // black and white pixel correction, averages the white and black spots
-    camera_sensor->set_bpc(camera_sensor, 1);  // 0 = disable , 1 = enable
-    camera_sensor->set_wpc(camera_sensor, 1);  // 0 = disable , 1 = enable
-    // digital clamp white balance
-    camera_sensor->set_dcw(camera_sensor, 0);  // 0 = disable , 1 = enable
+        // controls the gain
+        camera_sensor->set_gain_ctrl(camera_sensor, 0);  // 0 = disable , 1 = enable
 
-    // gamma correction
-    camera_sensor->set_raw_gma(camera_sensor,
-                               1);  // 0 = disable , 1 = enable (makes much lighter and noisy)
+        // automatic gain control gain, controls by how much the resulting image
+        // should be amplified
+        camera_sensor->set_agc_gain(camera_sensor, 2);                                 // 0 to 30
+        camera_sensor->set_gainceiling(camera_sensor, static_cast<gainceiling_t>(6));  // 0 to 6
 
-    camera_sensor->set_lenc(camera_sensor, 0);  // 0 = disable , 1 = enable // 0 =
-                                                // disable , 1 = enable
+        // black and white pixel correction, averages the white and black spots
+        camera_sensor->set_bpc(camera_sensor, 1);  // 0 = disable , 1 = enable
+        camera_sensor->set_wpc(camera_sensor, 1);  // 0 = disable , 1 = enable
+        // digital clamp white balance
+        camera_sensor->set_dcw(camera_sensor, 0);  // 0 = disable , 1 = enable
 
-    camera_sensor->set_colorbar(camera_sensor, 0);  // 0 = disable , 1 = enable
+        // gamma correction
+        camera_sensor->set_raw_gma(camera_sensor,
+                                   1);  // 0 = disable , 1 = enable (makes much lighter and noisy)
 
-    camera_sensor->set_special_effect(camera_sensor,
-                                      2);  // 0 to 6 (0 - No Effect, 1 - Negative, 2 - Grayscale, 3 - Red Tint,
-                                           // 4 - Green Tint, 5 - Blue Tint, 6 - Sepia)
+        camera_sensor->set_lenc(camera_sensor, 0);  // 0 = disable , 1 = enable // 0 =
+                                                    // disable , 1 = enable
 
-    // it gets overriden somewhere somehow
+        camera_sensor->set_colorbar(camera_sensor, 0);  // 0 = disable , 1 = enable
+
+        camera_sensor->set_special_effect(camera_sensor,
+                                          2);  // 0 to 6 (0 - No Effect, 1 - Negative, 2 - Grayscale, 3 - Red Tint,
+                                               // 4 - Green Tint, 5 - Blue Tint, 6 - Sepia)
+    }
+
+    // Default framesize for OpenIris tracking
     camera_sensor->set_framesize(camera_sensor, FRAMESIZE_240X240);
     ESP_LOGI(CAMERA_MANAGER_TAG, "Setting up camera sensor done");
 }
@@ -182,20 +191,28 @@ bool CameraManager::setupCamera()
         return false;
     }
 
-#if CONFIG_GENERAL_INCLUDE_UVC_MODE
     const auto temp_sensor = esp_camera_sensor_get();
 
+#if CONFIG_GENERAL_INCLUDE_UVC_MODE
     // Thanks to lick_it, we discovered that OV5640 likes to overheat when
     // running at higher than usual xclk frequencies.
     // Hence, why we're limiting the faster ones for OV2640
-    if (const auto camera_id = temp_sensor->id.PID; camera_id == OV5640_PID)
+    if (temp_sensor->id.PID == OV5640_PID)
     {
         config.xclk_freq_hz = OV5640_XCLK_FREQ_HZ;
         esp_camera_deinit();
         esp_camera_init(&config);
     }
-
 #endif
+
+    // OV3660 requires 20MHz XCLK to generate proper JPEG streams in esp32-camera,
+    // otherwise the PLL settings result in broken/empty 1KB frames.
+    if (temp_sensor->id.PID == OV3660_PID)
+    {
+        config.xclk_freq_hz = 20000000;
+        esp_camera_deinit();
+        esp_camera_init(&config);
+    }
 
     this->setupCameraSensor();
     return true;
