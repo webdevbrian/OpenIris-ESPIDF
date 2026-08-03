@@ -66,6 +66,11 @@ CONFIG_SPIRAM_SPEED=80
 CONFIG_SPIRAM_SPEED_80M=y
 # CONFIG_LED_EXTERNAL_CONTROL is not set
 CONFIG_CAMERA_USB_XCLK_FREQ=23000000
+# The OV3660 variant of this module needs a 20MHz XCLK for valid JPEG output, and
+# CameraManager re-inits the sensor at 20MHz when it detects one. Starting at a different
+# clock and switching leaves the sensor PLL in a state that produces NO-SOI/FB-OVF frames,
+# so start at 20MHz here and let the re-init be a no-op.
+CONFIG_CAMERA_WIFI_XCLK_FREQ=20000000
 CONFIG_GENERAL_INCLUDE_UVC_MODE=y
 # CONFIG_START_IN_UVC_MODE is not set
 # CONFIG_MONITORING_LED_CURRENT is not set
