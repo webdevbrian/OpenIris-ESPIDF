@@ -106,7 +106,7 @@ jobs:
         if: github.ref_type == 'tag'
         with:
           files: build/*.zip
-          prerelease: ${{contains(github.ref_type, 'rc')}}
+          prerelease: ${{contains(github.ref_name, 'rc')}}
 
   cleanup:
     needs: [setup, release]
